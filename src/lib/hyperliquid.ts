@@ -1,7 +1,7 @@
 const HL_API = 'https://api.hyperliquid.xyz'
 
 export const BUILDER_ADDRESS = process.env.NEXT_PUBLIC_BUILDER_ADDRESS as string
-export const BUILDER_FEE = parseInt(process.env.NEXT_PUBLIC_BUILDER_FEE || '3')
+export const BUILDER_FEE = parseInt(process.env.NEXT_PUBLIC_BUILDER_FEE || '5')
 export const REFERRAL_CODE = process.env.NEXT_PUBLIC_REFERRAL_CODE as string
 export const HL_NETWORK = process.env.NEXT_PUBLIC_HL_NETWORK || 'mainnet'
 

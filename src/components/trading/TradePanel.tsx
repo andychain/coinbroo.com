@@ -21,6 +21,10 @@ interface TradePanelProps {
 type Side = 'long' | 'short'
 type OrderType = 'market' | 'limit'
 
+const HL_TAKER_FEE = 0.00035   // 0.035%
+const HL_MAKER_FEE = -0.0001   // -0.010% rebate
+const BUILDER_FEE_RATE = BUILDER_FEE / 100000
+
 export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, onOrderPlaced }: TradePanelProps) {
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
@@ -55,8 +59,13 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, onOrderPl
     return isLong ? markPrice * (1 - liqPct) : markPrice * (1 + liqPct)
   }, [sizeCoin, markPrice, leverage, isLong])
 
+  const hlFeeUsd = useMemo(() => {
+    const rate = orderType === 'market' ? HL_TAKER_FEE : HL_MAKER_FEE
+    return orderValue * rate
+  }, [orderValue, orderType])
+
   const builderFeeUsd = useMemo(() => {
-    return orderValue * (BUILDER_FEE / 100000)
+    return orderValue * BUILDER_FEE_RATE
   }, [orderValue])
 
   async function placeOrder() {
@@ -233,9 +242,27 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, onOrderPl
               <span className="text-short font-mono">${liqPrice.toFixed(1)}</span>
             </div>
           )}
-          <div className="flex justify-between text-xs">
-            <span className="text-text-muted">Builder fee ({(BUILDER_FEE / 1000).toFixed(3)}%)</span>
-            <span className="text-text-secondary font-mono">${builderFeeUsd.toFixed(4)}</span>
+          <div className="border-t border-border-primary pt-1.5 space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className="text-text-muted">
+                {orderType === 'market' ? 'Taker fee (0.035%)' : 'Maker fee (-0.010%)'}
+              </span>
+              <span className={`font-mono ${orderType === 'limit' ? 'text-long' : 'text-text-secondary'}`}>
+                {orderType === 'limit' ? '-' : ''}${Math.abs(hlFeeUsd).toFixed(4)}
+              </span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-text-muted">Builder fee ({(BUILDER_FEE / 1000).toFixed(3)}%)</span>
+              <span className="text-text-secondary font-mono">${builderFeeUsd.toFixed(4)}</span>
+            </div>
+            {orderValue > 0 && (
+              <div className="flex justify-between text-xs border-t border-border-primary pt-1">
+                <span className="text-text-secondary font-medium">Total fee</span>
+                <span className={`font-mono font-medium ${orderType === 'limit' && hlFeeUsd + builderFeeUsd < 0 ? 'text-long' : 'text-text-primary'}`}>
+                  {(hlFeeUsd + builderFeeUsd) < 0 ? '-' : ''}${Math.abs(hlFeeUsd + builderFeeUsd).toFixed(4)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
