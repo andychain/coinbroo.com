@@ -1,44 +1,32 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useAccount, useDisconnect } from 'wagmi'
-import { useOnboarding } from '@/hooks/useOnboarding'
+import { type OnboardState } from '@/hooks/useOnboarding'
 
 const BUILDER_ADDRESS = process.env.NEXT_PUBLIC_BUILDER_ADDRESS
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Coinbroo'
 
-export function OnboardingModal() {
-  const { address, isConnected } = useAccount()
-  const { disconnect } = useDisconnect()
-  const { state, error, isNew, runOnboarding, isApproved, dismiss, retry } = useOnboarding()
+interface OnboardingModalProps {
+  state: OnboardState
+  isNew: boolean
+  error: string | null
+  onClose: () => void
+}
 
-  useEffect(() => {
-    if (isConnected && address && state === 'idle') {
-      if (isApproved(address)) return
-      runOnboarding(address)
-    }
-  }, [isConnected, address, state, isApproved, runOnboarding])
-
-  // Don't show if not connected, approved, done, or dismissed
-  if (!isConnected || !address) return null
-  if (isApproved(address) || state === 'done' || state === 'dismissed') return null
-  // Don't show during idle — wait for checking/approving to start
-  if (state === 'idle') return null
+export function OnboardingModal({ state, isNew, error, onClose }: OnboardingModalProps) {
+  // Only show during active approval flow
+  if (state === 'idle' || state === 'done') return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="bg-bg-secondary border border-border-primary rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl relative">
 
-        {/* X — dismiss and use app without approving */}
         <button
-          onClick={dismiss}
+          onClick={onClose}
           className="absolute top-4 right-4 text-text-muted hover:text-text-primary transition-colors text-lg leading-none"
-          aria-label="Close"
         >
           ✕
         </button>
 
-        {/* Logo */}
         <div className="flex items-center gap-2 mb-5">
           <div className="w-8 h-8 rounded-lg bg-accent-blue flex items-center justify-center">
             <span className="text-white font-bold">H</span>
@@ -49,7 +37,7 @@ export function OnboardingModal() {
         {state === 'checking' ? (
           <>
             <h2 className="text-text-primary font-semibold mb-2">Setting up your account...</h2>
-            <p className="text-text-muted text-sm">Checking your Hyperliquid account status.</p>
+            <p className="text-text-muted text-sm">Just a moment while we check your account.</p>
             <div className="mt-4 h-1 bg-bg-tertiary rounded-full overflow-hidden">
               <div className="h-full bg-accent-blue rounded-full animate-pulse w-1/3" />
             </div>
@@ -81,15 +69,31 @@ export function OnboardingModal() {
                 <span className="text-long">Yes, anytime</span>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-xs text-text-muted mb-3">
+            <div className="flex items-center gap-2 text-xs text-text-muted">
               <div className="w-3 h-3 rounded-full border-2 border-accent-blue border-t-transparent animate-spin flex-shrink-0" />
               Waiting for wallet signature...
             </div>
+          </>
+        ) : state === 'needs_deposit' ? (
+          <>
+            <h2 className="text-text-primary font-semibold mb-2">Deposit required</h2>
+            <p className="text-text-muted text-sm mb-4">
+              You need to deposit USDC to Hyperliquid before trading on {APP_NAME}.
+              Once deposited, come back and place your order.
+            </p>
+            <a
+              href="https://app.hyperliquid.xyz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full py-2.5 bg-accent-blue text-white rounded-lg text-sm font-medium text-center hover:bg-accent-blue-dim transition-colors mb-2"
+            >
+              Deposit on Hyperliquid →
+            </a>
             <button
-              onClick={() => { disconnect(); retry() }}
+              onClick={onClose}
               className="w-full py-2 text-xs text-text-muted hover:text-text-secondary transition-colors"
             >
-              ← Disconnect wallet
+              I'll do it later
             </button>
           </>
         ) : state === 'error' ? (
@@ -97,16 +101,10 @@ export function OnboardingModal() {
             <h2 className="text-text-primary font-semibold mb-2">Something went wrong</h2>
             <p className="text-short text-sm mb-4">{error}</p>
             <button
-              onClick={retry}
+              onClick={onClose}
               className="w-full py-2.5 bg-accent-blue text-white rounded-lg text-sm font-medium hover:bg-accent-blue-dim transition-colors mb-2"
             >
               Try again
-            </button>
-            <button
-              onClick={dismiss}
-              className="w-full py-2 text-xs text-text-muted hover:text-text-secondary transition-colors"
-            >
-              Skip for now
             </button>
           </>
         ) : null}

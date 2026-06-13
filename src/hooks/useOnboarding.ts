@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useWalletClient } from 'wagmi'
 import { isNewUser, postExchange } from '@/lib/hyperliquid'
 import { signApproveBuilderFee } from '@/lib/signing'
 
-type OnboardState = 'idle' | 'checking' | 'approving' | 'done' | 'error' | 'dismissed'
+export type OnboardState = 'idle' | 'checking' | 'approving' | 'done' | 'needs_deposit' | 'error'
 
 const STORAGE_KEY = 'ht_builder_approved'
 
@@ -33,19 +33,15 @@ export function useOnboarding() {
     }
   }, [])
 
-  const dismiss = useCallback(() => {
-    setState('dismissed')
-  }, [])
-
-  const retry = useCallback(() => {
+  const reset = useCallback(() => {
     setState('idle')
     setError(null)
   }, [])
 
-  const runOnboarding = useCallback(async (address: string) => {
-    if (!walletClient) return
-    if (isApproved(address)) { setState('done'); return }
-    if (state === 'checking' || state === 'approving' || state === 'dismissed') return
+  // Called when user clicks Place Order for the first time
+  const ensureApproved = useCallback(async (address: string): Promise<boolean> => {
+    if (!walletClient) return false
+    if (isApproved(address)) return true
 
     setState('checking')
     setError(null)
@@ -61,21 +57,28 @@ export function useOnboarding() {
       if (result?.status === 'ok') {
         markApproved(address)
         setState('done')
+        return true
       } else {
-        throw new Error(JSON.stringify(result?.response) || 'ApproveBuilderFee failed')
+        const msg = JSON.stringify(result?.response) || 'ApproveBuilderFee failed'
+        throw new Error(msg)
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       const isRejected = msg.includes('rejected') || msg.includes('denied') ||
         msg.includes('cancelled') || msg.includes('cancel') || msg.includes('User rejected')
+      const needsDeposit = msg.includes('Must deposit') || msg.includes('deposit before')
+
       if (isRejected) {
         setState('idle')
+      } else if (needsDeposit) {
+        setState('needs_deposit')
       } else {
         setError(msg)
         setState('error')
       }
+      return false
     }
-  }, [walletClient, isApproved, markApproved, state])
+  }, [walletClient, isApproved, markApproved])
 
-  return { state, error, isNew, runOnboarding, isApproved, dismiss, retry }
+  return { state, error, isNew, isApproved, ensureApproved, reset }
 }

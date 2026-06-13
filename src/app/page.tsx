@@ -7,7 +7,6 @@ import { OrderBook } from '@/components/trading/OrderBook'
 import { TradePanel } from '@/components/trading/TradePanel'
 import { Positions } from '@/components/trading/Positions'
 import { MarketList } from '@/components/trading/MarketList'
-import { OnboardingModal } from '@/components/ui/OnboardingModal'
 import { useHLWebSocket } from '@/hooks/useHLWebSocket'
 import { getMeta, getAllMids } from '@/lib/hyperliquid'
 import type { OrderBook as OBType } from '@/hooks/useHLWebSocket'
@@ -98,9 +97,7 @@ export default function TradingPage() {
 
   return (
     <div className="flex flex-col h-screen bg-bg-primary overflow-hidden">
-      <OnboardingModal />
-
-      <TopBar
+<TopBar
         selectedMarket={selectedCoin}
         markPrice={markPrice}
         priceChange={priceChange}
@@ -147,12 +144,15 @@ export default function TradingPage() {
             </span>
           </div>
           {/* TradingView widget placeholder */}
-          <div className="flex-1 relative">
-            <iframe
-              src={`https://www.tradingview.com/widgetembed/?symbol=BYBIT%3A${selectedCoin}USDT.P&interval=15&theme=dark&style=1&locale=en&hide_side_toolbar=0&allow_symbol_change=0`}
-              className="w-full h-full border-0"
-            />
-</div>
+          <div className="flex-1 flex items-center justify-center bg-bg-tertiary">
+            <div className="text-center">
+              <p className="text-text-muted text-sm mb-2">Chart</p>
+              <p className="text-text-muted text-xs">
+                Embed TradingView widget here:<br />
+                <code className="text-accent-blue text-2xs">new TradingView.widget(&#123; symbol: &quot;HYPERLIQUID:{selectedCoin}USDT&quot; &#125;)</code>
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Trade panel */}
