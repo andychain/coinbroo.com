@@ -5,9 +5,10 @@ import { useWalletClient } from 'wagmi'
 import { isNewUser, postExchange } from '@/lib/hyperliquid'
 import { signApproveBuilderFee } from '@/lib/signing'
 
-type OnboardState = 'idle' | 'checking' | 'approving' | 'done' | 'error' | 'cancelled'
+type OnboardState = 'idle' | 'checking' | 'approving' | 'done' | 'error' | 'dismissed'
 
 const STORAGE_KEY = 'ht_builder_approved'
+const DISMISSED_KEY = 'ht_onboard_dismissed'
 
 export function useOnboarding() {
   const { data: walletClient } = useWalletClient()
@@ -17,26 +18,41 @@ export function useOnboarding() {
 
   const isApproved = useCallback((address: string): boolean => {
     if (typeof window === 'undefined') return false
-    const approved = localStorage.getItem(STORAGE_KEY)
-    if (!approved) return false
     try {
-      const list: string[] = JSON.parse(approved)
+      const list: string[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
       return list.includes(address.toLowerCase())
     } catch { return false }
   }, [])
 
-  const markApproved = useCallback((address: string) => {
-    if (typeof window === 'undefined') return
-    const existing = localStorage.getItem(STORAGE_KEY)
-    let list: string[] = []
-    try { list = existing ? JSON.parse(existing) : [] } catch { list = [] }
-    if (!list.includes(address.toLowerCase())) {
-      list.push(address.toLowerCase())
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-    }
+  const isDismissed = useCallback((): boolean => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem(DISMISSED_KEY) === 'true'
   }, [])
 
-  const reset = useCallback(() => {
+  const markApproved = useCallback((address: string) => {
+    if (typeof window === 'undefined') return
+    try {
+      const list: string[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+      if (!list.includes(address.toLowerCase())) {
+        list.push(address.toLowerCase())
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+      }
+    } catch {}
+  }, [])
+
+  const dismiss = useCallback(() => {
+    // User closed the modal — remember this so it doesn't re-appear on refresh
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(DISMISSED_KEY, 'true')
+    }
+    setState('dismissed')
+  }, [])
+
+  const retry = useCallback(() => {
+    // Clear dismissed state and go back to idle so modal re-shows
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(DISMISSED_KEY)
+    }
     setState('idle')
     setError(null)
   }, [])
@@ -44,8 +60,8 @@ export function useOnboarding() {
   const runOnboarding = useCallback(async (address: string) => {
     if (!walletClient) return
     if (isApproved(address)) return
-    // Don't re-trigger if already in progress or cancelled
-    if (state === 'checking' || state === 'approving' || state === 'cancelled') return
+    if (isDismissed()) { setState('dismissed'); return }
+    if (state === 'checking' || state === 'approving') return
 
     setState('checking')
     setError(null)
@@ -53,16 +69,10 @@ export function useOnboarding() {
     try {
       const newUser = await isNewUser(address)
       setIsNew(newUser)
-
       setState('approving')
 
       const { action, nonce, signature } = await signApproveBuilderFee(walletClient)
-
-      console.log('Sending to HL exchange:', JSON.stringify({ action, nonce, signature }, null, 2))
-
       const result = await postExchange(action, nonce, signature)
-
-      console.log('HL exchange result:', result)
 
       if (result?.status === 'ok') {
         markApproved(address)
@@ -72,15 +82,16 @@ export function useOnboarding() {
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
-      console.error('Onboarding error:', msg)
-      if (msg.includes('rejected') || msg.includes('denied') || msg.includes('cancelled') || msg.includes('cancel') || msg.includes('User rejected')) {
-        setState('cancelled') // Stop retrying — user explicitly cancelled
+      const isRejected = msg.includes('rejected') || msg.includes('denied') ||
+        msg.includes('cancelled') || msg.includes('cancel') || msg.includes('User rejected')
+      if (isRejected) {
+        setState('idle') // Go back to idle so user can connect again or dismiss
       } else {
         setError(msg)
         setState('error')
       }
     }
-  }, [walletClient, isApproved, markApproved, state])
+  }, [walletClient, isApproved, isDismissed, markApproved, state])
 
-  return { state, error, isNew, runOnboarding, isApproved, reset }
+  return { state, error, isNew, runOnboarding, isApproved, isDismissed, dismiss, retry }
 }
