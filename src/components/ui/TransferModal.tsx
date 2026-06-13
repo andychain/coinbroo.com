@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useAccount, useWalletClient, useSwitchChain, useWriteContract, useReadContract } from 'wagmi'
+import { useAccount, useWalletClient, useReadContract } from 'wagmi'
 import { arbitrum } from 'wagmi/chains'
-import { parseUnits, formatUnits } from 'viem'
+import { parseUnits, formatUnits, encodeFunctionData } from 'viem'
 import { postExchange } from '@/lib/hyperliquid'
 import { signWithdraw } from '@/lib/signing'
 
@@ -32,8 +32,6 @@ interface TransferModalProps {
 export function TransferModal({ availableBalance, initialTab = 'deposit', onClose }: TransferModalProps) {
   const { address, chain } = useAccount()
   const { data: walletClient } = useWalletClient()
-  const { switchChain } = useSwitchChain()
-  const { writeContractAsync } = useWriteContract()
 
   const [tab, setTab] = useState<Tab>(initialTab)
   const [amount, setAmount] = useState('')
@@ -54,29 +52,27 @@ export function TransferModal({ availableBalance, initialTab = 'deposit', onClos
   const usdcBalanceNum = usdcBalance ? parseFloat(formatUnits(usdcBalance, 6)) : 0
 
   async function handleDeposit() {
-    if (!address || !amountNum) return
+    if (!address || !amountNum || !walletClient) return
     try {
       if (!onArbitrum) {
         setStatus({ type: 'loading', msg: 'Switching to Arbitrum...' })
-        await switchChain({ chainId: arbitrum.id })
+        await walletClient.switchChain({ id: arbitrum.id })
       }
 
       const usdAmount = parseUnits(amount, 6)
 
       setStatus({ type: 'loading', msg: 'Approving USDC...' })
-      await writeContractAsync({
-        address: USDC_ARBITRUM,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [HL_BRIDGE, usdAmount],
+      await walletClient.sendTransaction({
+        to: USDC_ARBITRUM,
+        data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [HL_BRIDGE, usdAmount] }),
+        chain: arbitrum,
       })
 
       setStatus({ type: 'loading', msg: 'Depositing...' })
-      await writeContractAsync({
-        address: HL_BRIDGE,
-        abi: BRIDGE_ABI,
-        functionName: 'deposit',
-        args: [BigInt(Math.floor(amountNum * 1e6))],
+      await walletClient.sendTransaction({
+        to: HL_BRIDGE,
+        data: encodeFunctionData({ abi: BRIDGE_ABI, functionName: 'deposit', args: [BigInt(Math.floor(amountNum * 1e6))] }),
+        chain: arbitrum,
       })
 
       setStatus({ type: 'success', msg: `Deposited $${amount} USDC. It may take ~1 min to appear.` })
