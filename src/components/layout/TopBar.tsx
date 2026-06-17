@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { useAccount_HL } from '@/hooks/useAccountHL'
 import { MarketList } from '@/components/trading/MarketList'
@@ -32,6 +32,13 @@ export function TopBar({ market, markPrice, change24h, markets, onSelectMarket }
   const { isConnected } = useAccount()
   const { accountValue, totalPnl } = useAccount_HL()
   const [marketOpen, setMarketOpen] = useState(false)
+
+  // Lock background scroll while the market selector is open (like Hyperliquid)
+  useEffect(() => {
+    const el = document.documentElement
+    el.style.overflow = marketOpen ? 'hidden' : ''
+    return () => { el.style.overflow = '' }
+  }, [marketOpen])
 
   const isUp = change24h >= 0
   const fundingPositive = (market?.funding ?? 0) >= 0
