@@ -34,6 +34,15 @@ export async function getMetaAndAssetCtxs(dex?: string): Promise<[{ universe: Ma
   return info(dex ? { type: 'metaAndAssetCtxs', dex } : { type: 'metaAndAssetCtxs' })
 }
 
+export interface Candle {
+  t: number; T: number; s: string; i: string
+  o: string; c: string; h: string; l: string; v: string; n: number
+}
+
+export async function getCandleSnapshot(coin: string, interval: string, startTime: number, endTime: number): Promise<Candle[]> {
+  return info({ type: 'candleSnapshot', req: { coin, interval, startTime, endTime } })
+}
+
 // ─── Spot ─────────────────────────────────────────────────────────────────────
 
 export interface SpotToken {

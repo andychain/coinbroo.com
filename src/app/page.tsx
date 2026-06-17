@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import { NavBar } from '@/components/layout/NavBar'
 import { TopBar } from '@/components/layout/TopBar'
+import { Chart } from '@/components/trading/Chart'
 import { OrderBook } from '@/components/trading/OrderBook'
 import { TradePanel } from '@/components/trading/TradePanel'
 import { Positions } from '@/components/trading/Positions'
@@ -73,6 +74,7 @@ export default function TradingPage() {
 
   const change24h = market && market.prevDayPx > 0 ? ((markPrice - market.prevDayPx) / market.prevDayPx) * 100 : (market?.change24h || 0)
   const spread = topAsk && topBid ? topAsk - topBid : 0
+  const pairLabel = market ? (market.kind === 'spot' ? `${market.display}/USDC` : `${market.display}-USDC`) : selectedCoin
 
   return (
     <div className="flex flex-col min-h-screen bg-bg-primary">
@@ -87,25 +89,9 @@ export default function TradingPage() {
 
       {/* Trading row fills the first viewport; scroll down for positions/balances */}
       <div className="flex h-[calc(100vh-6rem)] overflow-hidden flex-shrink-0">
-        {/* Chart */}
+        {/* Chart — native Hyperliquid candles (perps + spot) */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {market?.hasTvChart ? (
-            <iframe
-              key={selectedCoin}
-              src={`https://www.tradingview.com/widgetembed/?symbol=BYBIT%3A${market.display}USDT.P&interval=15&theme=dark&style=1&locale=en&hide_side_toolbar=0&allow_symbol_change=0`}
-              className="w-full h-full border-0"
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center gap-2 px-6">
-              <span className="text-text-primary font-semibold text-lg">{market?.display || selectedCoin}</span>
-              <span className="font-mono text-2xl font-bold text-text-primary">
-                ${markPrice > 0 ? markPrice.toLocaleString('en-US', { maximumFractionDigits: 6 }) : '—'}
-              </span>
-              <span className="text-xs text-text-muted max-w-xs">
-                Chart not available for this market. Live order book and price shown on the right.
-              </span>
-            </div>
-          )}
+          <Chart key={selectedCoin} coin={selectedCoin} label={pairLabel} />
         </div>
 
         {/* Order book */}
