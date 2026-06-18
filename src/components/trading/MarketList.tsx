@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { UnifiedMarket, MarketCategory } from '@/hooks/useMarkets'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 
 interface MarketListProps {
   markets: UnifiedMarket[]
@@ -24,6 +25,17 @@ function fmtVol(n: number) {
   return '$' + Math.max(0, n).toLocaleString('en-US', { maximumFractionDigits: 0 })
 }
 
+// Compact USD (e.g. $227M, $27.4M, $8.70M) — used on mobile where space is tight
+function fmtCompactUsd(n: number) {
+  if (n <= 0) return '—'
+  if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B'
+  if (n >= 1e8) return '$' + (n / 1e6).toFixed(0) + 'M'
+  if (n >= 1e7) return '$' + (n / 1e6).toFixed(1) + 'M'
+  if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M'
+  if (n >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K'
+  return '$' + n.toFixed(0)
+}
+
 const TAB_ORDER: (MarketCategory | 'All')[] = ['All', 'Perps', 'Spot']
 
 type SortKey = 'symbol' | 'price' | 'change' | 'funding' | 'volume' | 'oi'
@@ -35,6 +47,7 @@ export function MarketList({ markets, selected, onSelect }: MarketListProps) {
   const [strict, setStrict] = useState(true)
   const [sortKey, setSortKey] = useState<SortKey>('volume')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const isMobile = useMediaQuery('(max-width: 767px)')
 
   const spotView = category === 'Spot'
 
@@ -79,9 +92,11 @@ export function MarketList({ markets, selected, onSelect }: MarketListProps) {
 
   const pairSuffix = (m: UnifiedMarket) => (m.kind === 'spot' ? '/USDC' : '-USDC')
 
-  const gridCols = spotView
-    ? 'grid-cols-[1.6fr_1fr_1.3fr_1.1fr_1.3fr]'
-    : 'grid-cols-[1.6fr_1fr_1.3fr_0.9fr_1.1fr_1.1fr]'
+  const gridCols = isMobile
+    ? 'grid-cols-[1.5fr_1fr_1.1fr]'
+    : spotView
+      ? 'grid-cols-[1.6fr_1fr_1.3fr_1.1fr_1.3fr]'
+      : 'grid-cols-[1.6fr_1fr_1.3fr_0.9fr_1.1fr_1.1fr]'
 
   const arrow = (key: SortKey) => (sortKey === key ? (sortDir === 'desc' ? '▾' : '▴') : '')
 
@@ -158,12 +173,22 @@ export function MarketList({ markets, selected, onSelect }: MarketListProps) {
 
       {/* Table header (sortable) */}
       <div className={`grid ${gridCols} px-3 py-1.5 border-b border-border-primary flex-shrink-0`}>
-        <SortHeader label="Symbol" k="symbol" align="left" />
-        <SortHeader label="Last Price" k="price" />
-        <SortHeader label="24h Change" k="change" />
-        {!spotView && <SortHeader label="8h Funding" k="funding" />}
-        <SortHeader label="Volume" k="volume" />
-        <SortHeader label={spotView ? 'Market Cap' : 'Open Interest'} k="oi" />
+        {isMobile ? (
+          <>
+            <SortHeader label="Symbol" k="symbol" align="left" />
+            <SortHeader label="Volume" k="volume" />
+            <SortHeader label="Last / 24h" k="price" />
+          </>
+        ) : (
+          <>
+            <SortHeader label="Symbol" k="symbol" align="left" />
+            <SortHeader label="Last Price" k="price" />
+            <SortHeader label="24h Change" k="change" />
+            {!spotView && <SortHeader label="8h Funding" k="funding" />}
+            <SortHeader label="Volume" k="volume" />
+            <SortHeader label={spotView ? 'Market Cap' : 'Open Interest'} k="oi" />
+          </>
+        )}
       </div>
 
       {/* Rows */}
@@ -179,40 +204,68 @@ export function MarketList({ markets, selected, onSelect }: MarketListProps) {
               <button
                 key={m.coin}
                 onClick={() => onSelect(m.coin)}
-                className={`w-full grid ${gridCols} items-center px-3 py-2 border-b border-border-primary/40 transition-colors hover:bg-bg-hover text-left ${
+                className={`w-full grid ${gridCols} items-center px-3 py-2.5 border-b border-border-primary/40 transition-colors hover:bg-bg-hover text-left ${
                   isSelected ? 'bg-bg-hover' : ''
                 }`}
               >
-                {/* Symbol */}
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-sm font-medium text-text-primary truncate">{m.display}{pairSuffix(m)}</span>
-                  {m.maxLeverage > 0 && (
-                    <span className="text-[9px] text-text-secondary bg-bg-tertiary px-1 py-0.5 rounded leading-none flex-shrink-0">{m.maxLeverage}x</span>
-                  )}
-                  {m.kind === 'spot' && (
-                    <span className="text-[9px] text-accent-blue bg-bg-tertiary px-1 py-0.5 rounded leading-none flex-shrink-0">SPOT</span>
-                  )}
-                </div>
-                {/* Last price */}
-                <span className="text-sm font-mono text-text-primary text-right tabular-nums">{fmtPrice(m.price)}</span>
-                {/* 24h change */}
-                <span className={`text-xs font-mono text-right tabular-nums ${isUp ? 'text-long' : 'text-short'}`}>
-                  {absChg !== 0 ? `${isUp ? '+' : ''}${fmtPrice(Math.abs(absChg))} / ` : ''}{isUp ? '+' : ''}{m.change24h.toFixed(2)}%
-                </span>
-                {/* Funding — perps view only */}
-                {!spotView && (
-                  <span className="text-xs font-mono text-text-secondary text-right tabular-nums">
-                    {m.kind === 'perp' ? `${(m.funding * 100).toFixed(4)}%` : '—'}
-                  </span>
+                {isMobile ? (
+                  <>
+                    {/* Symbol + badges, stacked */}
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <span className="text-md font-medium text-text-primary truncate">{m.display}{pairSuffix(m)}</span>
+                      <div className="flex items-center gap-1">
+                        {m.maxLeverage > 0 && (
+                          <span className="text-[9px] text-text-secondary bg-bg-tertiary px-1 py-0.5 rounded leading-none">{m.maxLeverage}x</span>
+                        )}
+                        {m.kind === 'spot' && (
+                          <span className="text-[9px] text-accent-blue bg-bg-tertiary px-1 py-0.5 rounded leading-none">SPOT</span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Volume (compact) */}
+                    <span className="text-sm font-mono text-text-secondary text-right tabular-nums">{fmtCompactUsd(m.volume24h)}</span>
+                    {/* Last price + 24h change, stacked */}
+                    <div className="flex flex-col gap-1 items-end">
+                      <span className="text-sm font-mono text-text-primary tabular-nums">{fmtPrice(m.price)}</span>
+                      <span className={`text-xs font-mono tabular-nums ${isUp ? 'text-long' : 'text-short'}`}>
+                        {isUp ? '+' : ''}{m.change24h.toFixed(2)}%
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Symbol */}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-sm font-medium text-text-primary truncate">{m.display}{pairSuffix(m)}</span>
+                      {m.maxLeverage > 0 && (
+                        <span className="text-[9px] text-text-secondary bg-bg-tertiary px-1 py-0.5 rounded leading-none flex-shrink-0">{m.maxLeverage}x</span>
+                      )}
+                      {m.kind === 'spot' && (
+                        <span className="text-[9px] text-accent-blue bg-bg-tertiary px-1 py-0.5 rounded leading-none flex-shrink-0">SPOT</span>
+                      )}
+                    </div>
+                    {/* Last price */}
+                    <span className="text-sm font-mono text-text-primary text-right tabular-nums">{fmtPrice(m.price)}</span>
+                    {/* 24h change */}
+                    <span className={`text-xs font-mono text-right tabular-nums ${isUp ? 'text-long' : 'text-short'}`}>
+                      {absChg !== 0 ? `${isUp ? '+' : ''}${fmtPrice(Math.abs(absChg))} / ` : ''}{isUp ? '+' : ''}{m.change24h.toFixed(2)}%
+                    </span>
+                    {/* Funding — perps view only */}
+                    {!spotView && (
+                      <span className="text-xs font-mono text-text-secondary text-right tabular-nums">
+                        {m.kind === 'perp' ? `${(m.funding * 100).toFixed(4)}%` : '—'}
+                      </span>
+                    )}
+                    {/* Volume */}
+                    <span className="text-xs font-mono text-text-secondary text-right tabular-nums">{fmtVol(m.volume24h)}</span>
+                    {/* Market Cap (spot) or Open Interest (perps) */}
+                    <span className="text-xs font-mono text-text-secondary text-right tabular-nums">
+                      {spotView
+                        ? (m.marketCap ? fmtUsd(m.marketCap) : '—')
+                        : (m.kind === 'perp' ? fmtUsd(m.openInterest * m.price) : '—')}
+                    </span>
+                  </>
                 )}
-                {/* Volume */}
-                <span className="text-xs font-mono text-text-secondary text-right tabular-nums">{fmtVol(m.volume24h)}</span>
-                {/* Market Cap (spot) or Open Interest (perps) */}
-                <span className="text-xs font-mono text-text-secondary text-right tabular-nums">
-                  {spotView
-                    ? (m.marketCap ? fmtUsd(m.marketCap) : '—')
-                    : (m.kind === 'perp' ? fmtUsd(m.openInterest * m.price) : '—')}
-                </span>
               </button>
             )
           })

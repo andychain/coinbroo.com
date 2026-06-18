@@ -12,6 +12,7 @@ import { useHLWebSocket } from '@/hooks/useHLWebSocket'
 import { useAutoDisconnect } from '@/hooks/useAutoDisconnect'
 import { useMarkets } from '@/hooks/useMarkets'
 import { useBaseFees } from '@/hooks/useBaseFees'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import type { OrderBook as OBType, Trade } from '@/hooks/useHLWebSocket'
 
 export default function TradingPage() {
@@ -19,6 +20,8 @@ export default function TradingPage() {
   const [mids, setMids] = useState<Record<string, number>>({})
   const [orderBooks, setOrderBooks] = useState<Record<string, OBType>>({})
   const [trades, setTrades] = useState<Record<string, Trade[]>>({})
+  const isMobile = useMediaQuery('(max-width: 767px)')
+  const [mobileTab, setMobileTab] = useState<'trade' | 'book'>('trade')
   useAutoDisconnect()
 
   const markets = useMarkets()
@@ -77,6 +80,34 @@ export default function TradingPage() {
   const spread = topAsk && topBid ? topAsk - topBid : 0
   const pairLabel = market ? (market.kind === 'spot' ? `${market.display}/USDC` : `${market.display}-USDC`) : selectedCoin
 
+  // Shared panels — rendered into either the desktop columns or the mobile stack
+  const chartEl = <Chart key={selectedCoin} coin={selectedCoin} label={pairLabel} />
+  const orderBookEl = (
+    <OrderBook
+      coin={market?.display || selectedCoin}
+      bids={bids}
+      asks={asks}
+      markPrice={markPrice}
+      spread={spread}
+      trades={trades[selectedCoin] || []}
+      szDecimals={market?.szDecimals ?? 2}
+    />
+  )
+  const tradePanelEl = (
+    <TradePanel
+      coin={market?.display || selectedCoin}
+      markPrice={markPrice}
+      assetIndex={market?.assetIndex ?? -1}
+      maxLeverage={market?.maxLeverage || 50}
+      baseTakerFee={baseFees.taker}
+      baseMakerFee={baseFees.maker}
+      isSpot={market?.kind === 'spot'}
+      szDecimals={market?.szDecimals ?? 4}
+      baseToken={market?.baseToken}
+      onOrderPlaced={() => {}}
+    />
+  )
+
   return (
     <div className="flex flex-col min-h-screen bg-bg-primary">
       <NavBar />
@@ -88,42 +119,54 @@ export default function TradingPage() {
         onSelectMarket={setSelectedCoin}
       />
 
-      {/* Trading row fills the first viewport; scroll down for positions/balances */}
-      <div className="flex h-[calc(100vh-6rem)] overflow-hidden flex-shrink-0">
-        {/* Chart — native Hyperliquid candles (perps + spot) */}
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <Chart key={selectedCoin} coin={selectedCoin} label={pairLabel} />
-        </div>
+      {isMobile ? (
+        /* Mobile: chart on top, then a Trade / Order Book tab switch */
+        <div className="flex flex-col">
+          <div className="h-[58vh] min-h-[340px] flex flex-col border-b border-border-primary">
+            {chartEl}
+          </div>
 
-        {/* Order book */}
-        <div className="w-52 flex-shrink-0 border-l border-border-primary hidden md:flex flex-col">
-          <OrderBook
-            coin={market?.display || selectedCoin}
-            bids={bids}
-            asks={asks}
-            markPrice={markPrice}
-            spread={spread}
-            trades={trades[selectedCoin] || []}
-            szDecimals={market?.szDecimals ?? 2}
-          />
-        </div>
+          <div className="flex border-b border-border-primary bg-bg-secondary flex-shrink-0">
+            {([['trade', 'Trade'], ['book', 'Order Book']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setMobileTab(key)}
+                className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                  mobileTab === key
+                    ? 'text-text-primary border-b-2 border-accent-blue -mb-px'
+                    : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-        {/* Trade panel */}
-        <div className="w-60 flex-shrink-0 border-l border-border-primary flex flex-col min-h-0">
-          <TradePanel
-            coin={market?.display || selectedCoin}
-            markPrice={markPrice}
-            assetIndex={market?.assetIndex ?? -1}
-            maxLeverage={market?.maxLeverage || 50}
-            baseTakerFee={baseFees.taker}
-            baseMakerFee={baseFees.maker}
-            isSpot={market?.kind === 'spot'}
-            szDecimals={market?.szDecimals ?? 4}
-            baseToken={market?.baseToken}
-            onOrderPlaced={() => {}}
-          />
+          {mobileTab === 'trade' ? (
+            <div className="flex flex-col">{tradePanelEl}</div>
+          ) : (
+            <div className="h-[480px] flex flex-col">{orderBookEl}</div>
+          )}
         </div>
-      </div>
+      ) : (
+        /* Desktop: trading row fills the first viewport; scroll down for positions/balances */
+        <div className="flex h-[calc(100vh-6rem)] overflow-hidden flex-shrink-0">
+          {/* Chart — native Hyperliquid candles (perps + spot) */}
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+            {chartEl}
+          </div>
+
+          {/* Order book */}
+          <div className="w-52 flex-shrink-0 border-l border-border-primary flex flex-col">
+            {orderBookEl}
+          </div>
+
+          {/* Trade panel */}
+          <div className="w-60 flex-shrink-0 border-l border-border-primary flex flex-col min-h-0">
+            {tradePanelEl}
+          </div>
+        </div>
+      )}
 
       {/* Positions / balances — revealed by scrolling down */}
       <div className="border-t border-border-primary bg-bg-secondary">

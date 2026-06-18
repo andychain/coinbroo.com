@@ -38,3 +38,14 @@
     -moz-appearance: textfield;
   }
 }
+
+@layer utilities {
+  /* Hide scrollbar but keep scrolling (used for mobile horizontal stat strips) */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
