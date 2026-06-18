@@ -28,6 +28,32 @@ interface TopBarProps {
   onSelectMarket: (coin: string) => void
 }
 
+// Round token logo from Hyperliquid's coin-icon CDN, with a lettered fallback.
+function TokenLogo({ symbol, size }: { symbol: string; size: number }) {
+  const [errored, setErrored] = useState(false)
+  if (!symbol || errored) {
+    return (
+      <div
+        style={{ width: size, height: size, fontSize: size * 0.42 }}
+        className="rounded-full bg-bg-tertiary flex items-center justify-center font-bold text-text-secondary flex-shrink-0"
+      >
+        {symbol ? symbol[0] : '?'}
+      </div>
+    )
+  }
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={`https://app.hyperliquid.xyz/coins/${symbol}.svg`}
+      alt={symbol}
+      width={size}
+      height={size}
+      onError={() => setErrored(true)}
+      className="rounded-full bg-bg-tertiary flex-shrink-0"
+    />
+  )
+}
+
 export function TopBar({ market, markPrice, change24h, markets, onSelectMarket }: TopBarProps) {
   const { isConnected } = useAccount()
   const { accountValue, totalPnl } = useAccount_HL()
@@ -70,9 +96,10 @@ export function TopBar({ market, markPrice, change24h, markets, onSelectMarket }
         <div className="flex items-center gap-2 md:gap-3 mr-3 md:mr-5 flex-shrink-0 border-r border-border-primary pr-3 md:pr-5">
           <button
             onClick={() => setMarketOpen(o => !o)}
-            className="flex items-center gap-2 hover:bg-bg-hover rounded-md px-2 py-1.5 -mx-2 transition-colors"
+            className="flex items-center gap-2.5 hover:bg-bg-hover rounded-md px-2 py-1 -mx-2 transition-colors"
           >
-            <span className="text-text-primary font-bold text-base">{pairLabel}</span>
+            <TokenLogo symbol={market?.display || ''} size={26} />
+            <span className="text-text-primary font-bold text-xl">{pairLabel}</span>
             {market && market.maxLeverage > 0 && (
               <span className="text-[10px] text-text-secondary bg-bg-tertiary px-1.5 py-0.5 rounded leading-none">{market.maxLeverage}x</span>
             )}
@@ -120,6 +147,7 @@ export function TopBar({ market, markPrice, change24h, markets, onSelectMarket }
             onClick={() => { setStatsOpen(false); setMarketOpen(o => !o) }}
             className="flex items-center gap-2 min-w-0"
           >
+            <TokenLogo symbol={market?.display || ''} size={30} />
             <div className="flex flex-col items-start min-w-0">
               <span className="text-lg font-bold text-text-primary leading-tight truncate">{pairLabel}</span>
               {market && market.maxLeverage > 0 && (
