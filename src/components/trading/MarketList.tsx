@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { UnifiedMarket, MarketCategory } from '@/hooks/useMarkets'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { TokenLogo } from '@/components/ui/TokenLogo'
@@ -42,13 +42,35 @@ const TAB_ORDER: (MarketCategory | 'All')[] = ['All', 'Perps', 'Spot']
 type SortKey = 'symbol' | 'price' | 'change' | 'funding' | 'volume' | 'oi'
 type SortDir = 'asc' | 'desc'
 
+// Remember the user's last filter choice (category + Strict/All) across opens
+// and reloads, like Hyperliquid.
+const PREFS_KEY = 'cb:marketSelectorPrefs'
+function loadPrefs(): { category: MarketCategory | 'All'; strict: boolean } {
+  const fallback = { category: 'All' as const, strict: true }
+  if (typeof window === 'undefined') return fallback
+  try {
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')
+    return {
+      category: TAB_ORDER.includes(p.category) ? p.category : 'All',
+      strict: typeof p.strict === 'boolean' ? p.strict : true,
+    }
+  } catch {
+    return fallback
+  }
+}
+
 export function MarketList({ markets, selected, onSelect }: MarketListProps) {
   const [search, setSearch] = useState('')
-  const [category, setCategory] = useState<MarketCategory | 'All'>('All')
-  const [strict, setStrict] = useState(true)
+  const [category, setCategory] = useState<MarketCategory | 'All'>(() => loadPrefs().category)
+  const [strict, setStrict] = useState(() => loadPrefs().strict)
   const [sortKey, setSortKey] = useState<SortKey>('volume')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const isMobile = useMediaQuery('(max-width: 767px)')
+
+  // Persist filter choice whenever it changes
+  useEffect(() => {
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ category, strict })) } catch { /* ignore */ }
+  }, [category, strict])
 
   const spotView = category === 'Spot'
 
