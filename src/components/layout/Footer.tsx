@@ -10,7 +10,14 @@ export function Footer() {
       {/* Credit + contact */}
       <div className="flex items-center gap-1 text-text-secondary">
         <span>Made by</span>
-        <span className="text-text-primary font-medium">CyphCube</span>
+        <a
+          href="https://github.com/CyphCube"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-text-primary font-medium hover:text-accent-blue transition-colors"
+        >
+          CyphCube
+        </a>
         <span>with</span>
         <span className="text-short">♥</span>
         <span className="text-text-muted mx-1">·</span>
