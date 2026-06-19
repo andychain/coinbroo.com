@@ -77,6 +77,9 @@ export interface OrderParams {
   szDecimals?: number      // size decimals for this asset
   isSpot?: boolean         // spot uses 8 max decimals instead of 6
   reduceOnly?: boolean
+  // Trigger order (Stop/Take). When set, the order rests until triggerPx is hit;
+  // isMarket = execute as market on trigger, else as a limit at `px`.
+  trigger?: { triggerPx: number; isMarket: boolean; tpsl: 'tp' | 'sl' }
 }
 
 // HL price rule: max 5 significant figures, and max (MAX-szDecimals) decimal places.
@@ -103,19 +106,29 @@ export async function signOrder(
   const nonce = getNonce()
   const szDecimals = params.szDecimals ?? 4
   const isSpot = params.isSpot ?? false
-  const isMarket = !params.px
 
-  // Market order = IoC limit priced through the book (5% slippage cap)
+  // Build the order's price + type. A market leg (no resting limit price) is an
+  // IoC limit priced through the book with a 5% slippage cap.
   let priceStr: string
-  let tif: 'Gtc' | 'Ioc'
-  if (isMarket) {
+  let orderT: object
+  if (params.trigger) {
+    const { triggerPx, isMarket, tpsl } = params.trigger
+    if (isMarket) {
+      // execute as market once triggered: slippage-capped from the trigger price
+      const slipped = params.isBuy ? triggerPx * 1.05 : triggerPx * 0.95
+      priceStr = formatPx(slipped, szDecimals, isSpot)
+    } else {
+      priceStr = formatPx(params.px!, szDecimals, isSpot)
+    }
+    orderT = { trigger: { isMarket, triggerPx: formatPx(triggerPx, szDecimals, isSpot), tpsl } }
+  } else if (!params.px) {
     const ref = params.markPx || 0
     const slipped = params.isBuy ? ref * 1.05 : ref * 0.95
     priceStr = formatPx(slipped, szDecimals, isSpot)
-    tif = 'Ioc'
+    orderT = { limit: { tif: 'Ioc' } }
   } else {
-    priceStr = formatPx(params.px!, szDecimals, isSpot)
-    tif = 'Gtc'
+    priceStr = formatPx(params.px, szDecimals, isSpot)
+    orderT = { limit: { tif: 'Gtc' } }
   }
 
   const order = {
@@ -124,7 +137,7 @@ export async function signOrder(
     p: priceStr,
     s: formatSz(params.sz, szDecimals),
     r: params.reduceOnly ?? false,
-    t: { limit: { tif } },
+    t: orderT,
   }
 
   const action = {

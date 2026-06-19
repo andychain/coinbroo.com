@@ -22,7 +22,18 @@ interface TradePanelProps {
   onOrderPlaced?: () => void
 }
 
-type OrderType = 'market' | 'limit'
+type OrderType = 'market' | 'limit' | 'stopLimit' | 'stopMarket' | 'takeLimit' | 'takeMarket'
+
+const PRO_TYPES: { key: OrderType; label: string }[] = [
+  { key: 'stopLimit', label: 'Stop Limit' },
+  { key: 'stopMarket', label: 'Stop Market' },
+  { key: 'takeLimit', label: 'Take Limit' },
+  { key: 'takeMarket', label: 'Take Market' },
+]
+const PRO_LABEL: Record<string, string> = Object.fromEntries(PRO_TYPES.map(p => [p.key, p.label]))
+
+const isTriggerType = (t: OrderType) => t.startsWith('stop') || t.startsWith('take')
+const needsLimitPx = (t: OrderType) => t === 'limit' || t === 'stopLimit' || t === 'takeLimit'
 
 const BUILDER_RATE = BUILDER_FEE / 100000
 
@@ -40,8 +51,10 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, baseTaker
 
   const [isBuy, setIsBuy] = useState(true)
   const [orderType, setOrderType] = useState<OrderType>('limit')
+  const [showProMenu, setShowProMenu] = useState(false)
   const [sizeUsd, setSizeUsd] = useState('')
   const [limitPrice, setLimitPrice] = useState('')
+  const [triggerPrice, setTriggerPrice] = useState('')
   const [leverage, setLeverage] = useState(10)
   const [marginMode, setMarginMode] = useState<'cross' | 'isolated'>('cross')
   const [reduceOnly, setReduceOnly] = useState(false)
@@ -70,9 +83,11 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, baseTaker
   const orderValue = isSpot ? margin : margin * clampedLev
 
   const sizeCoin = useMemo(() => {
-    const px = orderType === 'limit' ? parseFloat(limitPrice) || markPrice : markPrice
+    let px = markPrice
+    if (needsLimitPx(orderType)) px = parseFloat(limitPrice) || markPrice
+    else if (isTriggerType(orderType)) px = parseFloat(triggerPrice) || markPrice
     return px === 0 ? 0 : orderValue / px
-  }, [orderValue, limitPrice, markPrice, orderType])
+  }, [orderValue, limitPrice, triggerPrice, markPrice, orderType])
 
   const liqPrice = useMemo(() => {
     if (isSpot || !sizeCoin || !markPrice) return null
@@ -95,6 +110,14 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, baseTaker
       setStatus({ type: 'error', msg: 'Enter a valid size' })
       return
     }
+    if (needsLimitPx(orderType) && !(parseFloat(limitPrice) > 0)) {
+      setStatus({ type: 'error', msg: 'Enter a limit price' })
+      return
+    }
+    if (isTriggerType(orderType) && !(parseFloat(triggerPrice) > 0)) {
+      setStatus({ type: 'error', msg: 'Enter a trigger price' })
+      return
+    }
     if (!isApproved(address)) {
       const approved = await ensureApproved(address)
       if (!approved) return
@@ -102,7 +125,14 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, baseTaker
     setPlacing(true)
     setStatus(null)
     try {
-      const px = orderType === 'limit' ? parseFloat(limitPrice) : undefined
+      const px = needsLimitPx(orderType) ? parseFloat(limitPrice) : undefined
+      const trigger = isTriggerType(orderType)
+        ? {
+            triggerPx: parseFloat(triggerPrice),
+            isMarket: !needsLimitPx(orderType),
+            tpsl: (orderType.startsWith('take') ? 'tp' : 'sl') as 'tp' | 'sl',
+          }
+        : undefined
       const { action, nonce, signature } = await signOrder(walletClient, {
         coin,
         isBuy,
@@ -112,6 +142,7 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, baseTaker
         szDecimals,
         isSpot,
         reduceOnly: isSpot ? false : reduceOnly,
+        trigger,
       })
       const actionWithAsset = {
         ...action,
@@ -183,11 +214,11 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, baseTaker
         )}
 
         {/* Order type tabs */}
-        <div className="flex items-center border-b border-border-primary flex-shrink-0">
+        <div className="flex items-center border-b border-border-primary flex-shrink-0 relative">
           {(['market', 'limit'] as OrderType[]).map(t => (
             <button
               key={t}
-              onClick={() => setOrderType(t)}
+              onClick={() => { setOrderType(t); setShowProMenu(false) }}
               className={`px-3 py-2 text-xs font-medium capitalize transition-colors ${
                 orderType === t ? 'text-text-primary border-b-2 border-accent-blue -mb-px' : 'text-text-muted hover:text-text-secondary'
               }`}
@@ -195,7 +226,38 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, baseTaker
               {t}
             </button>
           ))}
+          {/* Pro (trigger orders) */}
+          <button
+            onClick={() => setShowProMenu(v => !v)}
+            className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1 ${
+              isTriggerType(orderType) ? 'text-text-primary border-b-2 border-accent-blue -mb-px' : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            {isTriggerType(orderType) ? PRO_LABEL[orderType] : 'Pro'}
+            <svg className={`w-3 h-3 transition-transform ${showProMenu ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none">
+              <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           {isSpot && <span className="ml-auto pr-3 text-2xs text-accent-blue self-center">Spot</span>}
+
+          {showProMenu && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setShowProMenu(false)} />
+              <div className="absolute right-0 top-full z-30 mt-px w-40 bg-bg-secondary border border-border-primary rounded-md shadow-xl py-1">
+                {PRO_TYPES.map(p => (
+                  <button
+                    key={p.key}
+                    onClick={() => { setOrderType(p.key); setShowProMenu(false) }}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                      orderType === p.key ? 'text-accent-blue' : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex flex-col gap-2.5 p-3">
@@ -239,8 +301,28 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, baseTaker
             )}
           </div>
 
-          {/* Price (limit only) */}
-          {orderType === 'limit' && (
+          {/* Trigger price (Stop/Take orders) */}
+          {isTriggerType(orderType) && (
+            <div className="relative">
+              <label className="text-2xs text-text-muted block mb-1">Trigger Price (USDC)</label>
+              <input
+                type="number"
+                value={triggerPrice}
+                onChange={e => setTriggerPrice(e.target.value)}
+                placeholder={markPrice > 0 ? fmtPrice(markPrice) : '0.00'}
+                className="w-full bg-bg-tertiary border border-border-primary rounded-md px-3 py-2 text-sm text-text-primary font-mono placeholder:text-text-muted focus:outline-none focus:border-border-secondary"
+              />
+              <button
+                onClick={() => { if (markPrice > 0) setTriggerPrice(fmtPrice(markPrice)) }}
+                className="absolute right-2 top-[26px] text-2xs text-accent-blue hover:text-accent-blue-dim font-medium"
+              >
+                Mid
+              </button>
+            </div>
+          )}
+
+          {/* Limit price (Limit + Stop/Take Limit) */}
+          {needsLimitPx(orderType) && (
             <div className="relative">
               <label className="text-2xs text-text-muted block mb-1">Price (USDC)</label>
               <input
@@ -314,7 +396,7 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, baseTaker
           {isConnected ? (
             <button
               onClick={placeOrder}
-              disabled={placing || !sizeUsd}
+              disabled={placing || !sizeUsd || (needsLimitPx(orderType) && !limitPrice) || (isTriggerType(orderType) && !triggerPrice)}
               className={`w-full py-2.5 rounded-md text-sm font-semibold text-bg-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                 isBuy ? 'bg-long hover:bg-long-dim' : 'bg-short hover:bg-short-dim'
               }`}
