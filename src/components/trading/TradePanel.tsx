@@ -214,7 +214,7 @@ export function TradePanel({ coin, markPrice, assetIndex, maxLeverage, baseTaker
         )}
 
         {/* Order type tabs */}
-        <div className="flex items-center border-b border-border-primary flex-shrink-0 relative">
+        <div className="flex items-center justify-between border-b border-border-primary flex-shrink-0 relative px-1">
           {(['market', 'limit'] as OrderType[]).map(t => (
             <button
               key={t}
