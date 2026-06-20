@@ -33,7 +33,7 @@ export function Chart({ coin, label }: ChartProps) {
     if (!el) return
 
     const chart = createChart(el, {
-      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#7d8a8c', fontSize: 11, attributionLogo: false },
+      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#7d8a8c', fontSize: 11, attributionLogo: true },
       grid: { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
       rightPriceScale: { borderColor: '#1f2628' },
       timeScale: { borderColor: '#1f2628', timeVisible: true, secondsVisible: false },
@@ -55,12 +55,6 @@ export function Chart({ coin, label }: ChartProps) {
 
     return () => { chart.remove(); chartRef.current = null }
   }, [])
-
-  // Safety net: we render our own expandable attribution badge, so make sure the
-  // library's built-in logo never lingers (e.g. an orphan left behind by HMR).
-  useEffect(() => {
-    containerRef.current?.querySelectorAll('#tv-attr-logo').forEach(n => n.remove())
-  })
 
   // Load history + live updates whenever coin/interval changes
   useEffect(() => {
@@ -131,28 +125,8 @@ export function Chart({ coin, label }: ChartProps) {
         </div>
       </div>
 
-      {/* Chart canvas */}
-      <div className="relative flex-1 min-h-0">
-        <div ref={containerRef} className="absolute inset-0" />
-
-        {/* TradingView attribution — icon only, expands to full text on hover (like Hyperliquid) */}
-        <a
-          href="https://www.tradingview.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Chart by TradingView"
-          className="group absolute bottom-2 left-2 z-10 flex items-center rounded-md bg-black/60 px-2 py-1.5 backdrop-blur-sm hover:bg-black/75 transition-colors overflow-hidden"
-        >
-          <svg className="w-4 h-4 flex-shrink-0 text-text-primary" viewBox="0 0 36 28" fill="currentColor" aria-hidden="true">
-            <path d="M14 22H7V11H0V4h14v18z" />
-            <path d="M28.5 22a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z" />
-            <path d="M21 22h-6l7.5-18h6L21 22z" />
-          </svg>
-          <span className="max-w-0 ml-0 opacity-0 group-hover:max-w-[160px] group-hover:ml-1.5 group-hover:opacity-100 text-xs font-semibold text-text-primary whitespace-nowrap overflow-hidden transition-all duration-200 ease-out">
-            Chart by TradingView
-          </span>
-        </a>
-      </div>
+      {/* Chart canvas — native TradingView attribution logo shown bottom-left */}
+      <div ref={containerRef} className="flex-1 min-h-0" />
     </div>
   )
 }
